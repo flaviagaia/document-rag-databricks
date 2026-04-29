@@ -4,66 +4,77 @@ from typing import Any, Dict
 
 import streamlit as st
 
-from src.rag_pipeline import DEFAULT_QUERY
 from src.runtime_query import run_hybrid_query
 
-APP_TITLE = "Document RAG Databricks"
+APP_TITLE = "Assistente de Documentos"
+APP_SUBTITLE = "Faça uma pergunta em linguagem natural e encontre a resposta com base nos documentos indexados no lakehouse."
+EXAMPLE_QUESTIONS = [
+    "O que precisa estar habilitado antes de criar um índice vetorial padrão?",
+    "Como o Change Data Feed ajuda a manter o índice atualizado?",
+    "Qual é o papel do Unity Catalog nesse fluxo?",
+]
+
+
+def _similarity_label(score: float) -> str:
+    if score >= 0.75:
+        return "Muito alta"
+    if score >= 0.5:
+        return "Alta"
+    if score >= 0.3:
+        return "Média"
+    return "Baixa"
 
 
 def _render_summary(result: Dict[str, Any]) -> None:
     left, middle, right = st.columns(3)
-    left.metric("Top result", result["top_doc_id"])
-    middle.metric("Similarity", f"{result['top_similarity']:.4f}")
-    right.metric("Mode", result["runtime_mode"])
+    left.metric("Documento principal", result["top_doc_id"])
+    middle.metric("Confiança do melhor trecho", _similarity_label(result["top_similarity"]))
+    right.metric("Trechos encontrados", str(len(result["top_chunks"])))
 
 
 def _render_chunk_card(rank: int, chunk: Dict[str, Any]) -> None:
     with st.container(border=True):
-        st.markdown(f"**#{rank} {chunk['title']}**")
-        st.caption(f"Document {chunk['doc_id']} • chunk {chunk['chunk_id']}")
+        st.markdown(f"**Evidência {rank}: {chunk['title']}**")
+        st.caption(f"Documento {chunk['doc_id']}")
         st.write(chunk["chunk_text"])
-        footer = f"Similarity: {chunk['similarity']:.4f}"
+        footer = f"Confiança: {_similarity_label(chunk['similarity'])}"
         if chunk.get("url"):
-            footer += f" • Source: {chunk['url']}"
+            footer += f" • Fonte: {chunk['url']}"
         st.caption(footer)
 
 
 st.set_page_config(page_title=APP_TITLE, page_icon="📚", layout="wide")
 
 st.title(APP_TITLE)
-st.caption("Ask a question about the document collection and retrieve grounded evidence from the lakehouse-backed sample.")
+st.caption(APP_SUBTITLE)
 
-question = st.text_input("Question", value=DEFAULT_QUERY)
+with st.sidebar:
+    st.subheader("Perguntas de exemplo")
+    for example in EXAMPLE_QUESTIONS:
+        st.caption(f"• {example}")
+    st.divider()
+    st.subheader("Como usar")
+    st.caption("1. Digite sua pergunta.")
+    st.caption("2. Leia a resposta sugerida.")
+    st.caption("3. Confira os trechos de apoio logo abaixo.")
 
-if st.button("Search", type="primary") or question:
+default_question = "O que precisa estar habilitado antes de criar um índice vetorial padrão?"
+question = st.text_input("Digite sua pergunta", value=default_question, placeholder="Ex.: Como manter o índice vetorial atualizado?")
+
+search_clicked = st.button("Buscar resposta", type="primary")
+
+if search_clicked or question:
     result = run_hybrid_query(question)
     top_chunks = result["top_chunks"]
 
     _render_summary(result)
 
-    left, right = st.columns([1.2, 1])
+    st.subheader("Resposta sugerida")
+    st.info(result["answer"])
 
-    with left:
-        st.subheader("Answer")
-        st.write(result["answer"])
-        st.subheader("Retrieved chunks")
-        for i, chunk in enumerate(top_chunks, start=1):
-            _render_chunk_card(i, chunk)
+    st.subheader("Trechos que sustentam a resposta")
+    for i, chunk in enumerate(top_chunks, start=1):
+        _render_chunk_card(i, chunk)
 
-    with right:
-        st.subheader("Run summary")
-        summary = {
-            "dataset_source": result["dataset_source"],
-            "runtime_mode": result["runtime_mode"],
-            "query": result["query"],
-            "top_doc_id": result["top_doc_id"],
-            "report_artifact": result["report_artifact"],
-        }
-        if result.get("vector_error"):
-            summary["vector_error"] = result["vector_error"]
-        st.json(summary)
-
-        if result.get("document_count") is not None:
-            st.caption(f"Documents available in local sample: {result['document_count']}")
-        if result.get("chunk_count") is not None:
-            st.caption(f"Chunks available in local sample: {result['chunk_count']}")
+    if result.get("vector_error"):
+        st.warning("A busca semântica principal não respondeu neste momento. A resposta abaixo foi montada com o modo de fallback local para manter a consulta disponível.")
