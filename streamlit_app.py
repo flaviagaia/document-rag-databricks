@@ -29,7 +29,10 @@ def _render_summary(result: Dict[str, Any]) -> None:
     left, middle, right = st.columns(3)
     left.metric("Documento principal", result["top_doc_id"])
     middle.metric("Confiança do melhor trecho", _similarity_label(result["top_similarity"]))
-    right.metric("Trechos encontrados", str(len(result["top_chunks"])))
+    right.metric(
+        "Modo de busca",
+        "Principal" if result["runtime_mode"] == "databricks_vector_search" else "Alternativo",
+    )
 
 
 st.set_page_config(page_title=APP_TITLE, page_icon="📚", layout="wide")
@@ -45,16 +48,33 @@ with st.sidebar:
     st.subheader("Como usar")
     st.caption("1. Digite sua pergunta.")
     st.caption("2. Leia a resposta sugerida.")
-    st.caption("3. Confira os trechos de apoio logo abaixo.")
+    st.caption("3. Ajuste a pergunta se quiser refinar a resposta.")
 
 default_question = "O que precisa estar habilitado antes de criar um índice vetorial padrão?"
-question = st.text_input("Digite sua pergunta", value=default_question, placeholder="Ex.: Como manter o índice vetorial atualizado?")
+if "question_input" not in st.session_state:
+    st.session_state["question_input"] = default_question
+if "last_result" not in st.session_state:
+    st.session_state["last_result"] = None
 
-search_clicked = st.button("Buscar resposta", type="primary")
+with st.form("document_search_form"):
+    question = st.text_input(
+        "Digite sua pergunta",
+        key="question_input",
+        placeholder="Ex.: Como manter o índice vetorial atualizado?",
+    )
+    search_clicked = st.form_submit_button("Buscar resposta", type="primary")
 
-if search_clicked or question:
-    result = run_hybrid_query(question)
+if search_clicked:
+    normalized_question = question.strip()
+    if normalized_question:
+        st.session_state["last_result"] = run_hybrid_query(normalized_question)
+    else:
+        st.session_state["last_result"] = None
+        st.warning("Digite uma pergunta para continuar.")
 
+result = st.session_state["last_result"]
+
+if result:
     _render_summary(result)
 
     st.subheader("Resposta sugerida")
