@@ -72,7 +72,6 @@ if search_clicked or question:
     st.subheader("Resposta sugerida")
     st.info(result["answer"])
 
-    st.subheader("Trechos que sustentam a resposta")
     for i, chunk in enumerate(top_chunks, start=1):
         _render_chunk_card(i, chunk)
 

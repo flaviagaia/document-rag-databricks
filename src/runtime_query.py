@@ -63,6 +63,7 @@ def search_with_vector_search(question: str) -> Dict[str, Any]:
         raise RuntimeError("Vector Search returned no results.")
 
     top_chunk = top_chunks[0]
+    answer = top_chunk["chunk_text"].strip()
     return {
         "dataset_source": "workspace.document_rag.gold_vector_index_source",
         "runtime_mode": "databricks_vector_search",
@@ -72,10 +73,7 @@ def search_with_vector_search(question: str) -> Dict[str, Any]:
         "top_doc_id": top_chunk["doc_id"],
         "top_chunk_id": top_chunk["chunk_id"],
         "top_similarity": top_chunk["similarity"],
-        "answer": (
-            f"The strongest grounded answer is in {top_chunk['title']}. "
-            f"The retrieved chunk says: {top_chunk['chunk_text']}"
-        ),
+        "answer": answer,
         "top_chunks": top_chunks,
         "report_artifact": index_name,
     }
