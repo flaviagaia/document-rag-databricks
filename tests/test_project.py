@@ -23,6 +23,7 @@ class DocumentRAGDatabricksTestCase(unittest.TestCase):
     def test_query_hits_vector_search_document(self) -> None:
         result = run_pipeline("What has to be enabled before a standard vector search index can use a Delta source table?")
         self.assertEqual(result["top_doc_id"], "DOC-1002")
+        self.assertNotIn("The most relevant answer is grounded in", result["answer"])
 
     def test_runtime_detection_defaults_to_local(self) -> None:
         with patch.dict(os.environ, {}, clear=True):

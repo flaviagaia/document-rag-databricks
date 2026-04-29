@@ -91,6 +91,16 @@ def _query_vector(question: str) -> Dict[str, float]:
     return {token: count / length for token, count in counts.items()}
 
 
+def _clean_answer_text(chunk_text: str, title: str) -> str:
+    cleaned = chunk_text.replace("\n", " ").strip()
+    if cleaned.startswith("# "):
+        cleaned = cleaned[2:].strip()
+    title_prefix = title.strip()
+    if cleaned.lower().startswith(title_prefix.lower()):
+        cleaned = cleaned[len(title_prefix):].strip()
+    return cleaned
+
+
 def run_pipeline(question: str = DEFAULT_QUERY) -> Dict[str, object]:
     sample_info = build_sample_dataset()
     documents = _load_rows(sample_info["documents_path"])
@@ -107,10 +117,7 @@ def run_pipeline(question: str = DEFAULT_QUERY) -> Dict[str, object]:
     top_chunks = scored[:3]
 
     top_chunk = top_chunks[0]
-    answer = (
-        f"The most relevant answer is grounded in {top_chunk['title']}. "
-        f"The retrieved chunk indicates that {top_chunk['chunk_text']}"
-    )
+    answer = _clean_answer_text(str(top_chunk["chunk_text"]), str(top_chunk["title"]))
 
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
     report_path = PROCESSED_DIR / "document_rag_databricks_report.json"
