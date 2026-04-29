@@ -17,8 +17,31 @@ def in_databricks_runtime() -> bool:
     )
 
 
-def normalize_vector_rows(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
-    result = payload.get("result", {})
+def _payload_to_dict(payload: Any) -> Dict[str, Any]:
+    if isinstance(payload, dict):
+        return payload
+    if hasattr(payload, "as_dict"):
+        return payload.as_dict()
+    result = getattr(payload, "result", None)
+    manifest = getattr(result, "manifest", None) if result is not None else None
+    return {
+        "result": {
+            "manifest": {
+                "columns": [
+                    {"name": getattr(column, "name", "")}
+                    for column in getattr(manifest, "columns", [])
+                ]
+            }
+            if manifest is not None
+            else {},
+            "data_array": getattr(result, "data_array", []) if result is not None else [],
+        }
+    }
+
+
+def normalize_vector_rows(payload: Any) -> List[Dict[str, Any]]:
+    payload_dict = _payload_to_dict(payload)
+    result = payload_dict.get("result", {})
     manifest = result.get("manifest", {})
     columns = [
         column.get("name", f"column_{index}")

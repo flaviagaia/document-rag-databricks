@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import patch
 
 from src.rag_pipeline import run_pipeline
-from src.runtime_query import in_databricks_runtime, run_hybrid_query
+from src.runtime_query import in_databricks_runtime, normalize_vector_rows, run_hybrid_query
 
 
 class DocumentRAGDatabricksTestCase(unittest.TestCase):
@@ -35,6 +35,39 @@ class DocumentRAGDatabricksTestCase(unittest.TestCase):
         self.assertEqual(result["top_doc_id"], "DOC-1002")
         self.assertEqual(result["runtime_mode"], "local_retrieval_fallback_after_vector_error")
         self.assertIn("index warming", result["vector_error"])
+
+    def test_normalize_vector_rows_accepts_sdk_like_response(self) -> None:
+        class FakePayload:
+            def as_dict(self) -> dict[str, object]:
+                return {
+                    "result": {
+                        "manifest": {
+                            "columns": [
+                                {"name": "chunk_id"},
+                                {"name": "doc_id"},
+                                {"name": "title"},
+                                {"name": "url"},
+                                {"name": "chunk_text"},
+                                {"name": "score"},
+                            ]
+                        },
+                        "data_array": [
+                            [
+                                "DOC-1002_chunk_1",
+                                "DOC-1002",
+                                "Create a vector search index",
+                                "https://docs.example.com/vector-search/create-index",
+                                "Change Data Feed must be enabled on the source table.",
+                                0.81234,
+                            ]
+                        ],
+                    }
+                }
+
+        rows = normalize_vector_rows(FakePayload())
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["doc_id"], "DOC-1002")
+        self.assertEqual(rows[0]["similarity"], 0.8123)
 
 
 if __name__ == "__main__":
