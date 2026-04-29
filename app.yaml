@@ -1,0 +1,7 @@
+command:
+  - streamlit
+  - run
+  - streamlit_app.py
+env:
+  - name: VECTOR_SEARCH_INDEX
+    value: workspace.document_rag.document_rag_index
