@@ -14,6 +14,9 @@ def in_databricks_runtime() -> bool:
         os.getenv("DATABRICKS_RUNTIME_VERSION")
         or os.getenv("DB_IS_JOB_CLUSTER")
         or os.getenv("DATABRICKS_HOST")
+        or os.getenv("DATABRICKS_CLIENT_ID")
+        or os.getenv("DATABRICKS_CLIENT_SECRET")
+        or os.getenv("VECTOR_SEARCH_INDEX")
     )
 
 

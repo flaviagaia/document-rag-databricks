@@ -29,6 +29,10 @@ class DocumentRAGDatabricksTestCase(unittest.TestCase):
         with patch.dict(os.environ, {}, clear=True):
             self.assertFalse(in_databricks_runtime())
 
+    def test_runtime_detection_accepts_app_service_principal_env(self) -> None:
+        with patch.dict(os.environ, {"DATABRICKS_CLIENT_ID": "client-id-from-app"}, clear=True):
+            self.assertTrue(in_databricks_runtime())
+
     def test_hybrid_query_falls_back_when_vector_search_fails(self) -> None:
         with patch.dict(os.environ, {"DATABRICKS_HOST": "https://example.databricks.com"}, clear=True):
             with patch("src.runtime_query.search_with_vector_search", side_effect=RuntimeError("index warming")):
