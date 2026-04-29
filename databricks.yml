@@ -1,0 +1,24 @@
+bundle:
+  name: document-rag-databricks
+
+workspace:
+  root_path: /Workspace/Users/${workspace.current_user.userName}/document-rag-databricks
+
+resources:
+  jobs:
+    document_rag_pipeline_job:
+      name: document-rag-databricks-job
+      tasks:
+        - task_key: bronze_ingestion
+          notebook_task:
+            notebook_path: ./notebooks/01_bronze_ingestion.py
+        - task_key: silver_chunking
+          depends_on:
+            - task_key: bronze_ingestion
+          notebook_task:
+            notebook_path: ./notebooks/02_silver_chunking.py
+        - task_key: gold_index_source
+          depends_on:
+            - task_key: silver_chunking
+          notebook_task:
+            notebook_path: ./notebooks/03_gold_index_source.py

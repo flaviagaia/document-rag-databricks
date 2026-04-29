@@ -1,0 +1,4 @@
+-- Mosaic AI Vector Search setup notes
+-- 1. Create a vector search endpoint
+-- 2. Create an index from main.document_rag.gold_vector_index_source
+-- 3. Grant USE CATALOG / USE SCHEMA / SELECT privileges to the Databricks App service principal
