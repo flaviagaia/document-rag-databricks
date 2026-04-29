@@ -76,4 +76,4 @@ if search_clicked or question:
         _render_chunk_card(i, chunk)
 
     if result.get("vector_error"):
-        st.warning("A busca semântica principal não respondeu neste momento. A resposta abaixo foi montada com o modo de fallback local para manter a consulta disponível.")
+        st.warning("Não foi possível consultar a busca principal neste momento. Mesmo assim, exibimos uma resposta alternativa para você continuar a consulta.")
