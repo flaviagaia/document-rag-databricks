@@ -11,6 +11,11 @@ Ele foi desenhado para representar um fluxo completo de lakehouse:
 - app em **Streamlit** no estilo **Databricks Apps**;
 - e uma rota local reproduzível para manter o repositório executável no GitHub.
 
+Hoje o projeto já existe em duas formas complementares:
+
+- uma **versão local reproduzível**, ideal para GitHub, testes e demonstrações rápidas;
+- uma **versão conectada ao Databricks real**, com `Unity Catalog`, `Delta tables`, `Mosaic AI Vector Search` e `Databricks Apps`.
+
 ## Storytelling básico
 
 Quando uma empresa quer construir um assistente de documentação, normalmente ela precisa mais do que um chatbot. Ela precisa de:
@@ -153,7 +158,27 @@ Ele pode:
 - montar uma resposta grounded;
 - mostrar links, títulos e evidências.
 
-Neste repositório, existe uma interface local em `Streamlit` para demonstrar essa experiência de forma simples.
+Neste repositório, a interface em `Streamlit` funciona em dois modos:
+
+- **modo Databricks real**: consulta o índice `workspace.document_rag.document_rag_index`;
+- **modo local**: usa o fallback lexical reproduzível se o runtime Databricks não estiver disponível.
+
+Isso deixa a demo mais honesta e mais útil: o mesmo app serve tanto para o GitHub quanto para o workspace real.
+
+## API e app compartilham a mesma lógica
+
+Uma melhoria importante deste projeto é que:
+
+- a API em [app.py](/Users/flaviagaia/Documents/CV_FLAVIA_CODEX/document-rag-databricks/app.py)
+- e a interface em [streamlit_app.py](/Users/flaviagaia/Documents/CV_FLAVIA_CODEX/document-rag-databricks/streamlit_app.py)
+
+usam a mesma camada de execução híbrida em [runtime_query.py](/Users/flaviagaia/Documents/CV_FLAVIA_CODEX/document-rag-databricks/src/runtime_query.py).
+
+Na prática, isso significa:
+
+- se o projeto estiver rodando no Databricks, ele tenta usar `Vector Search`;
+- se o índice ainda estiver aquecendo ou se houver algum erro transitório, ele volta para o fallback local;
+- o comportamento fica consistente entre frontend e backend.
 
 ## Estrutura do repositório
 
@@ -171,6 +196,9 @@ Neste repositório, existe uma interface local em `Streamlit` para demonstrar es
 
 - [src/rag_pipeline.py](/Users/flaviagaia/Documents/CV_FLAVIA_CODEX/document-rag-databricks/src/rag_pipeline.py)  
   Faz chunking, retrieval local, grounding e artefato final.
+
+- [src/runtime_query.py](/Users/flaviagaia/Documents/CV_FLAVIA_CODEX/document-rag-databricks/src/runtime_query.py)  
+  Centraliza a decisão entre `Vector Search` real e fallback local.
 
 - [databricks.yml](/Users/flaviagaia/Documents/CV_FLAVIA_CODEX/document-rag-databricks/databricks.yml)  
   Exemplo de Asset Bundle para orquestração do pipeline.
@@ -217,6 +245,60 @@ streamlit run streamlit_app.py
 - `chunk_count >= 6`
 - `top_doc_id = DOC-1002`
 
+## Estado validado no Databricks real
+
+No workspace pessoal em que este projeto foi validado, o estado final ficou assim:
+
+- catálogo: `workspace`
+- schema: `workspace.document_rag`
+- tabelas Delta:
+  - `workspace.document_rag.bronze_documents`
+  - `workspace.document_rag.silver_document_chunks`
+  - `workspace.document_rag.gold_vector_index_source`
+- índice vetorial:
+  - `workspace.document_rag.document_rag_index`
+- endpoint vetorial:
+  - `document-rag-endpoint`
+- app:
+  - `document-rag-app`
+
+Snapshot validado:
+
+- `bronze_documents = 6`
+- `silver_document_chunks = 12`
+- `gold_vector_index_source = 12`
+- `document_rag_index indexed_row_count = 12`
+- `document_rag_index ready = true`
+- `document-rag-app status = RUNNING`
+
+## Variáveis e contrato do app
+
+O app Databricks usa:
+
+- `VECTOR_SEARCH_INDEX`
+
+Valor padrão:
+
+- `workspace.document_rag.document_rag_index`
+
+Se a variável não existir, o código já usa esse mesmo índice como default.
+
+## Fluxo operacional real
+
+No runtime Databricks, o caminho esperado é:
+
+1. documentos entram na `bronze`;
+2. o chunking publica trechos na `silver`;
+3. a tabela `gold` vira a fonte do índice vetorial;
+4. o app pergunta ao índice vetorial;
+5. o usuário recebe resposta grounded + evidência textual.
+
+Se a consulta vetorial falhar temporariamente:
+
+1. a camada híbrida registra o erro;
+2. faz fallback para a amostra local;
+3. mantém a demo responsiva em vez de simplesmente quebrar.
+
 ## O que esse projeto demonstra
 
 - arquitetura de RAG documental no estilo Databricks;
@@ -257,6 +339,17 @@ O ganho desse desenho é que ele separa muito bem:
 - **data plane**
 - **vector retrieval plane**
 - **application plane**
+
+Também existe uma separação importante entre:
+
+- **runtime path**
+  - lógica que decide se a consulta vai para o Databricks real ou para o fallback local
+- **retrieval path**
+  - consulta vetorial quando o índice está disponível
+- **resilience path**
+  - fallback seguro quando o índice ainda não está pronto ou quando o ambiente não expõe a SDK/credenciais esperadas
+
+Esse desenho é especialmente útil em ambientes enterprise porque reduz o risco de demos frágeis e melhora muito a transição entre desenvolvimento local e deployment real.
 
 Isso deixa o projeto mais próximo de uma arquitetura real de enterprise RAG.
 

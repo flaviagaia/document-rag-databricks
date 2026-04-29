@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from pydantic import BaseModel
 
-from src.rag_pipeline import run_pipeline
+from src.runtime_query import run_hybrid_query
 
 
 class QueryRequest(BaseModel):
@@ -27,4 +27,4 @@ def healthcheck() -> dict[str, str]:
 
 @app.post("/ask")
 def ask(request: QueryRequest) -> dict[str, object]:
-    return run_pipeline(request.question)
+    return run_hybrid_query(request.question)
