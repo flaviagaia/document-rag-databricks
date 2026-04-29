@@ -52,6 +52,8 @@ No repositório, eu mantive uma amostra local `watsonxDocsQA-style` para deixar 
 - **Mosaic AI Vector Search**
 - **Databricks Apps com Streamlit**
 - **Databricks Asset Bundles**
+- **app service principal**
+- **runtime híbrido com degradação controlada**
 
 ## Arquitetura
 
@@ -146,6 +148,25 @@ No fluxo de produção:
 3. um índice é criado a partir da tabela Delta;
 4. o app consulta esse índice para recuperar chunks semanticamente próximos da pergunta.
 
+Tecnicamente, este projeto usa a chamada:
+
+- `WorkspaceClient().vector_search_indexes.query_index(...)`
+
+com os campos:
+
+- `index_name`
+- `query_text`
+- `num_results`
+- `columns`
+
+O parser do projeto também trata explicitamente três formatos possíveis de resposta:
+
+- `dict`
+- objeto da SDK com `as_dict()`
+- objeto tipado com atributos estruturados
+
+Isso evita um problema comum em MVPs de Databricks: assumir um único formato de payload e cair no fallback mesmo com o índice já operacional.
+
 ## Papel do Databricks App com Streamlit
 
 O app final representa a camada de experiência do usuário.
@@ -165,6 +186,36 @@ Neste repositório, a interface em `Streamlit` funciona em dois modos:
 
 Isso deixa a demo mais honesta e mais útil: o mesmo app serve tanto para o GitHub quanto para o workspace real.
 
+## Autenticação e autorização do app
+
+Um ponto técnico importante deste projeto é que o app não depende de `PAT` hardcoded.
+
+No runtime real do Databricks Apps, a aplicação usa o service principal do próprio app. Isso significa que o ambiente pode expor credenciais e metadados como:
+
+- `DATABRICKS_HOST`
+- `DATABRICKS_CLIENT_ID`
+- `DATABRICKS_CLIENT_SECRET`
+
+Além disso, o projeto usa:
+
+- `VECTOR_SEARCH_INDEX`
+
+para desacoplar o nome físico do índice do código Python.
+
+Para o app consultar o índice vetorial com sucesso, o service principal precisa de:
+
+- `USE CATALOG` no catálogo pai
+- `USE SCHEMA` no schema pai
+- `SELECT` no índice vetorial
+
+No caso deste projeto, esses grants foram validados para:
+
+- catálogo `workspace`
+- schema `workspace.document_rag`
+- índice `workspace.document_rag.document_rag_index`
+
+Também foram mantidos grants coerentes sobre as tabelas Delta relacionadas ao fluxo.
+
 ## API e app compartilham a mesma lógica
 
 Uma melhoria importante deste projeto é que:
@@ -179,6 +230,11 @@ Na prática, isso significa:
 - se o projeto estiver rodando no Databricks, ele tenta usar `Vector Search`;
 - se o índice ainda estiver aquecendo ou se houver algum erro transitório, ele volta para o fallback local;
 - o comportamento fica consistente entre frontend e backend.
+
+Esse desenho reduz dois tipos de inconsistência muito comuns:
+
+- a UI dizer uma coisa e a API devolver outra;
+- o app funcionar localmente, mas cair em comportamento diferente no deployment real.
 
 ## Estrutura do repositório
 
@@ -199,6 +255,9 @@ Na prática, isso significa:
 
 - [src/runtime_query.py](/Users/flaviagaia/Documents/CV_FLAVIA_CODEX/document-rag-databricks/src/runtime_query.py)  
   Centraliza a decisão entre `Vector Search` real e fallback local.
+
+- [app.yaml](/Users/flaviagaia/Documents/CV_FLAVIA_CODEX/document-rag-databricks/app.yaml)  
+  Define o comando do app e injeta o nome do índice vetorial em `VECTOR_SEARCH_INDEX`.
 
 - [databricks.yml](/Users/flaviagaia/Documents/CV_FLAVIA_CODEX/document-rag-databricks/databricks.yml)  
   Exemplo de Asset Bundle para orquestração do pipeline.
@@ -261,6 +320,8 @@ No workspace pessoal em que este projeto foi validado, o estado final ficou assi
   - `document-rag-endpoint`
 - app:
   - `document-rag-app`
+- commit do app service principal:
+  - grants aplicados em catálogo, schema e índice
 
 Snapshot validado:
 
@@ -270,6 +331,42 @@ Snapshot validado:
 - `document_rag_index indexed_row_count = 12`
 - `document_rag_index ready = true`
 - `document-rag-app status = RUNNING`
+
+## Contrato do runtime híbrido
+
+O arquivo [runtime_query.py](/Users/flaviagaia/Documents/CV_FLAVIA_CODEX/document-rag-databricks/src/runtime_query.py) implementa três responsabilidades separadas:
+
+### 1. Detecção de ambiente
+
+Considera o runtime como Databricks real quando encontra pelo menos um destes sinais:
+
+- `DATABRICKS_RUNTIME_VERSION`
+- `DB_IS_JOB_CLUSTER`
+- `DATABRICKS_HOST`
+- `DATABRICKS_CLIENT_ID`
+- `DATABRICKS_CLIENT_SECRET`
+- `VECTOR_SEARCH_INDEX`
+
+Essa escolha é deliberadamente redundante para cobrir diferenças entre:
+
+- notebook/job runtime
+- Databricks Apps
+- execução local
+
+### 2. Consulta principal
+
+Executa `query_index` contra o índice vetorial configurado e normaliza o payload retornado.
+
+### 3. Degradação controlada
+
+Se a consulta vetorial falhar:
+
+- captura a exceção
+- registra o erro em `vector_error`
+- faz fallback para o retrieval local
+- devolve `runtime_mode = local_retrieval_fallback_after_vector_error`
+
+Isso mantém o app utilizável sem esconder que a rota principal falhou.
 
 ## Variáveis e contrato do app
 
@@ -283,6 +380,33 @@ Valor padrão:
 
 Se a variável não existir, o código já usa esse mesmo índice como default.
 
+Hoje o [app.yaml](/Users/flaviagaia/Documents/CV_FLAVIA_CODEX/document-rag-databricks/app.yaml) está assim, de forma propositalmente simples:
+
+```yaml
+command:
+  - streamlit
+  - run
+  - streamlit_app.py
+env:
+  - name: VECTOR_SEARCH_INDEX
+    value: workspace.document_rag.document_rag_index
+```
+
+Isso funciona bem para o MVP, mas existe uma distinção importante:
+
+- `value`: injeta um nome fixo de índice
+- `valueFrom`: seria a forma mais nativa quando o índice é adicionado como **App Resource** no Databricks Apps
+
+Ou seja, a implementação atual já roda, mas o próximo endurecimento técnico natural é transformar o índice em um recurso formal do app e trocar:
+
+- `value`
+
+por:
+
+- `valueFrom`
+
+quando a configuração de recursos estiver plenamente modelada pelo Apps UI ou por bundle declarativo compatível.
+
 ## Fluxo operacional real
 
 No runtime Databricks, o caminho esperado é:
@@ -292,6 +416,14 @@ No runtime Databricks, o caminho esperado é:
 3. a tabela `gold` vira a fonte do índice vetorial;
 4. o app pergunta ao índice vetorial;
 5. o usuário recebe resposta grounded + evidência textual.
+
+Num cenário de produção mais completo, esse fluxo normalmente seria expandido com:
+
+- observabilidade de latência por consulta
+- taxa de fallback
+- monitoramento de refresh do índice
+- versionamento de embedding
+- avaliação offline de retrieval
 
 Se a consulta vetorial falhar temporariamente:
 
@@ -306,6 +438,9 @@ Se a consulta vetorial falhar temporariamente:
 - fluxo pronto para Vector Search;
 - interface de consulta;
 - ponte clara entre demo local e stack real de plataforma.
+- preocupação com autenticação do app e permissões no Unity Catalog
+- parsing robusto da SDK do Databricks
+- fallback resiliente sem quebrar a experiência
 
 ## Leitura extremamente técnica
 
@@ -350,6 +485,22 @@ Também existe uma separação importante entre:
   - fallback seguro quando o índice ainda não está pronto ou quando o ambiente não expõe a SDK/credenciais esperadas
 
 Esse desenho é especialmente útil em ambientes enterprise porque reduz o risco de demos frágeis e melhora muito a transição entre desenvolvimento local e deployment real.
+
+## Próximas evoluções técnicas naturais
+
+Se a ideia for evoluir este projeto além do MVP atual, eu faria nesta ordem:
+
+1. transformar o índice vetorial em **App Resource** nativo e usar `valueFrom` em vez de `value`
+2. adicionar telemetria de:
+   - latência da consulta vetorial
+   - taxa de fallback
+   - top-k hit behavior
+3. incluir um benchmark explícito de retrieval com:
+   - `Recall@k`
+   - `MRR`
+   - `Hit Rate@k`
+4. armazenar avaliações em tabela Delta para observabilidade histórica
+5. adicionar camada gerativa real acima da recuperação para fechar o ciclo de RAG completo
 
 Isso deixa o projeto mais próximo de uma arquitetura real de enterprise RAG.
 
