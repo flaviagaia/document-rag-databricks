@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import patch
 
 from src.rag_pipeline import run_pipeline
-from src.runtime_query import in_databricks_runtime, normalize_vector_rows, run_hybrid_query
+from src.runtime_query import build_query_vector, in_databricks_runtime, normalize_vector_rows, run_hybrid_query
 
 
 class DocumentRAGDatabricksTestCase(unittest.TestCase):
@@ -32,6 +32,11 @@ class DocumentRAGDatabricksTestCase(unittest.TestCase):
     def test_runtime_detection_accepts_app_service_principal_env(self) -> None:
         with patch.dict(os.environ, {"DATABRICKS_CLIENT_ID": "client-id-from-app"}, clear=True):
             self.assertTrue(in_databricks_runtime())
+
+    def test_query_vector_maps_vector_search_question_to_expected_dimensions(self) -> None:
+        vector = build_query_vector("What must be enabled before creating a standard vector search index from a Delta table?")
+        self.assertGreater(vector[1], 0.0)
+        self.assertGreater(vector[2], 0.0)
 
     def test_hybrid_query_falls_back_when_vector_search_fails(self) -> None:
         with patch.dict(os.environ, {"DATABRICKS_HOST": "https://example.databricks.com"}, clear=True):

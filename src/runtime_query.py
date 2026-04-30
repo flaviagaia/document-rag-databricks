@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from typing import Any, Dict, List
 
 from .rag_pipeline import run_pipeline
@@ -9,6 +10,15 @@ from .rag_pipeline import run_pipeline
 DEFAULT_INDEX_NAME = "workspace.document_rag.document_rag_index"
 DEFAULT_COLUMNS = ["chunk_id", "doc_id", "title", "url", "chunk_text"]
 LOGGER = logging.getLogger(__name__)
+TOKEN_PATTERN = re.compile(r"[a-zA-Z0-9]+")
+KEYWORD_GROUPS = [
+    {"unity", "catalog", "catalogs", "schema", "schemas", "permission", "permissions", "governance", "model", "models", "volume", "volumes"},
+    {"vector", "search", "index", "indexes", "embedding", "embeddings", "endpoint", "endpoints"},
+    {"change", "data", "feed", "delta", "source", "table", "tables", "enabled", "enable", "incremental"},
+    {"app", "apps", "streamlit", "service", "principal", "auth", "authentication", "credential", "credentials"},
+    {"chunk", "chunks", "chunking", "semantic", "context", "paragraph", "paragraphs", "heading", "headings"},
+    {"refresh", "refreshes", "pipeline", "pipelines", "modified", "rows", "downstream", "sync", "corpus"},
+]
 
 
 def in_databricks_runtime() -> bool:
@@ -42,6 +52,19 @@ def _payload_to_dict(payload: Any) -> Dict[str, Any]:
             "data_array": getattr(result, "data_array", []) if result is not None else [],
         }
     }
+
+
+def build_query_vector(question: str) -> List[float]:
+    tokens = [token.lower() for token in TOKEN_PATTERN.findall(question)]
+    vector = [0.0] * len(KEYWORD_GROUPS)
+    for token in tokens:
+        for index, keywords in enumerate(KEYWORD_GROUPS):
+            if token in keywords:
+                vector[index] += 1.0
+
+    if not any(vector):
+        return [0.1] * len(KEYWORD_GROUPS)
+    return vector
 
 
 def normalize_vector_rows(payload: Any) -> List[Dict[str, Any]]:
@@ -94,7 +117,7 @@ def search_with_vector_search(question: str) -> Dict[str, Any]:
 
     response = workspace.vector_search_indexes.query_index(
         index_name=index_name,
-        query_text=question,
+        query_vector=build_query_vector(question),
         num_results=3,
         columns=DEFAULT_COLUMNS,
     )
