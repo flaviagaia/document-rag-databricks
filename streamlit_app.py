@@ -8,6 +8,10 @@ from src.runtime_query import run_hybrid_query
 
 APP_TITLE = "Assistente de Documentos"
 APP_SUBTITLE = "Faça uma pergunta em linguagem natural e encontre a resposta com base nos documentos indexados no lakehouse."
+DATASET_EXPLANATION = (
+    "Este assistente consulta uma base documental técnica sobre Databricks, com conteúdos de referência "
+    "sobre Unity Catalog, Vector Search, Delta Change Data Feed, Streamlit em Databricks Apps e boas práticas de RAG."
+)
 EXAMPLE_QUESTIONS = [
     "O que precisa estar habilitado antes de criar um índice vetorial padrão?",
     "Como o Change Data Feed ajuda a manter o índice atualizado?",
@@ -39,6 +43,7 @@ st.set_page_config(page_title=APP_TITLE, page_icon="📚", layout="wide")
 
 st.title(APP_TITLE)
 st.caption(APP_SUBTITLE)
+st.info(DATASET_EXPLANATION)
 
 with st.sidebar:
     st.subheader("Perguntas de exemplo")
