@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 from typing import Any, Dict, List
 
@@ -7,6 +8,7 @@ from .rag_pipeline import run_pipeline
 
 DEFAULT_INDEX_NAME = "workspace.document_rag.document_rag_index"
 DEFAULT_COLUMNS = ["chunk_id", "doc_id", "title", "url", "chunk_text"]
+LOGGER = logging.getLogger(__name__)
 
 
 def in_databricks_runtime() -> bool:
@@ -77,7 +79,19 @@ def search_with_vector_search(question: str) -> Dict[str, Any]:
     from databricks.sdk import WorkspaceClient
 
     index_name = os.getenv("VECTOR_SEARCH_INDEX", DEFAULT_INDEX_NAME)
-    workspace = WorkspaceClient()
+    host = os.getenv("DATABRICKS_HOST")
+    client_id = os.getenv("DATABRICKS_CLIENT_ID")
+    client_secret = os.getenv("DATABRICKS_CLIENT_SECRET")
+
+    if host and client_id and client_secret:
+        workspace = WorkspaceClient(
+            host=host,
+            client_id=client_id,
+            client_secret=client_secret,
+        )
+    else:
+        workspace = WorkspaceClient()
+
     response = workspace.vector_search_indexes.query_index(
         index_name=index_name,
         query_text=question,
@@ -110,6 +124,7 @@ def run_hybrid_query(question: str) -> Dict[str, Any]:
         try:
             return search_with_vector_search(question)
         except Exception as exc:  # pragma: no cover - defensive runtime fallback
+            LOGGER.exception("Primary Vector Search query failed; falling back to local retrieval.")
             fallback = run_pipeline(question)
             fallback["runtime_mode"] = "local_retrieval_fallback_after_vector_error"
             fallback["vector_error"] = str(exc)

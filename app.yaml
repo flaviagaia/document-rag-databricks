@@ -3,5 +3,7 @@ command:
   - run
   - streamlit_app.py
 env:
+  - name: DATABRICKS_HOST
+    value: https://dbc-1e959b0e-bc08.cloud.databricks.com
   - name: VECTOR_SEARCH_INDEX
     value: workspace.document_rag.document_rag_index
