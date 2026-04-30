@@ -163,7 +163,7 @@ def _augment_primary_document_context(top_chunks: List[Dict[str, Any]]) -> List[
 def normalize_vector_rows(payload: Any) -> List[Dict[str, Any]]:
     payload_dict = _payload_to_dict(payload)
     result = payload_dict.get("result", {})
-    manifest = result.get("manifest", {})
+    manifest = payload_dict.get("manifest") or result.get("manifest", {})
     columns = [
         column.get("name", f"column_{index}")
         for index, column in enumerate(manifest.get("columns", []))

@@ -135,6 +135,38 @@ class DocumentRAGDatabricksTestCase(unittest.TestCase):
         self.assertEqual(rows[0]["doc_id"], "DOC-1002")
         self.assertEqual(rows[0]["similarity"], 0.8123)
 
+    def test_normalize_vector_rows_accepts_live_api_shape(self) -> None:
+        rows = normalize_vector_rows(
+            {
+                "manifest": {
+                    "columns": [
+                        {"name": "chunk_id"},
+                        {"name": "doc_id"},
+                        {"name": "title"},
+                        {"name": "url"},
+                        {"name": "chunk_text"},
+                        {"name": "score"},
+                    ]
+                },
+                "result": {
+                    "data_array": [
+                        [
+                            "DOC-1002_chunk_2",
+                            "DOC-1002",
+                            "Create a vector search index",
+                            "https://docs.example.com/vector-search/create-index",
+                            "be enabled on the source table.",
+                            0.5,
+                        ]
+                    ]
+                },
+            }
+        )
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["doc_id"], "DOC-1002")
+        self.assertEqual(rows[0]["chunk_id"], "DOC-1002_chunk_2")
+        self.assertEqual(rows[0]["similarity"], 0.5)
+
 
 if __name__ == "__main__":
     unittest.main()
