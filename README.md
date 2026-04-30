@@ -28,6 +28,10 @@ Quando uma empresa quer construir um assistente de documentação, normalmente e
 
 Esse projeto existe para mostrar exatamente isso.
 
+## Interface
+
+![Demo do app Databricks RAG](assets/RAG_Databricks.jpg)
+
 ## Base pública escolhida
 
 A inspiração da base foi:
@@ -148,16 +152,17 @@ No fluxo de produção:
 3. um índice é criado a partir da tabela Delta;
 4. o app consulta esse índice para recuperar chunks semanticamente próximos da pergunta.
 
-Tecnicamente, este projeto usa a chamada:
+Tecnicamente, este projeto usa a API de Vector Search via SDK do Databricks com uma chamada `POST` para:
 
-- `WorkspaceClient().vector_search_indexes.query_index(...)`
+- `/api/2.0/vector-search/indexes/{index_name}/query`
 
-com os campos:
+com um payload contendo:
 
-- `index_name`
-- `query_text`
+- `query_vector`
 - `num_results`
 - `columns`
+
+Isso foi necessário porque o índice publicado neste projeto é do tipo `DELTA_SYNC` com coluna de embedding já materializada. Nesse cenário, a consulta precisa enviar vetor explícito em vez de `query_text`.
 
 O parser do projeto também trata explicitamente três formatos possíveis de resposta:
 
@@ -166,6 +171,8 @@ O parser do projeto também trata explicitamente três formatos possíveis de re
 - objeto tipado com atributos estruturados
 
 Isso evita um problema comum em MVPs de Databricks: assumir um único formato de payload e cair no fallback mesmo com o índice já operacional.
+
+Além disso, o projeto trata explicitamente a resposta real da API, em que `manifest` pode vir no topo do payload e `data_array` dentro de `result`. Esse detalhe foi importante para evitar respostas vazias no app mesmo quando o modo de busca principal estava ativo.
 
 ## Papel do Databricks App com Streamlit
 
