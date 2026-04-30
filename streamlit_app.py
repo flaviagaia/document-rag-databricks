@@ -6,6 +6,8 @@ import streamlit as st
 
 from src.runtime_query import run_hybrid_query
 
+# Build marker to keep the Databricks App deployment in sync with the
+# latest interface source whenever we need to invalidate a stale snapshot.
 APP_TITLE = "Assistente de Documentos"
 APP_SUBTITLE = "Faça uma pergunta em linguagem natural e encontre a resposta com base nos documentos indexados no lakehouse."
 DATASET_EXPLANATION = (

@@ -5,7 +5,7 @@ import os
 import re
 from typing import Any, Dict, List
 
-from .rag_pipeline import clean_answer_text, run_pipeline
+from .rag_pipeline import clean_answer_text, get_document_chunks, run_pipeline
 
 DEFAULT_INDEX_NAME = "workspace.document_rag.document_rag_index"
 DEFAULT_COLUMNS = ["chunk_id", "doc_id", "title", "url", "chunk_text"]
@@ -92,6 +92,14 @@ def build_query_vector(question: str) -> List[float]:
     return vector
 
 
+def build_vector_search_body(question: str) -> Dict[str, Any]:
+    return {
+        "columns": DEFAULT_COLUMNS,
+        "num_results": 10,
+        "query_vector": build_query_vector(question),
+    }
+
+
 def _chunk_rank(chunk_id: str) -> int:
     try:
         return int(chunk_id.rsplit("_", 1)[-1])
@@ -117,6 +125,39 @@ def _compose_grounded_answer(top_chunks: List[Dict[str, Any]]) -> str:
     if cleaned_parts:
         return " ".join(cleaned_parts).strip()
     return clean_answer_text(str(top_chunks[0]["chunk_text"]).strip(), primary_title)
+
+
+def _augment_primary_document_context(top_chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    if not top_chunks:
+        return top_chunks
+
+    primary_chunk = top_chunks[0]
+    primary_doc_id = str(primary_chunk["doc_id"])
+    primary_order = _chunk_rank(str(primary_chunk.get("chunk_id", "")))
+    local_doc_chunks = get_document_chunks(primary_doc_id)
+    if not local_doc_chunks:
+        return top_chunks
+
+    existing_chunk_ids = {str(chunk.get("chunk_id", "")) for chunk in top_chunks}
+    augmented = list(top_chunks)
+    for local_chunk in local_doc_chunks:
+        local_order = int(local_chunk["chunk_order"])
+        if local_order not in {primary_order - 1, primary_order, primary_order + 1}:
+            continue
+        local_chunk_id = str(local_chunk["chunk_id"])
+        if local_chunk_id in existing_chunk_ids:
+            continue
+        augmented.append(
+            {
+                "chunk_id": local_chunk_id,
+                "doc_id": str(local_chunk["doc_id"]),
+                "title": str(local_chunk["title"]),
+                "url": str(local_chunk["url"]),
+                "chunk_text": str(local_chunk["chunk_text"]),
+                "similarity": float(primary_chunk.get("similarity", 0.0)),
+            }
+        )
+    return augmented
 
 
 def normalize_vector_rows(payload: Any) -> List[Dict[str, Any]]:
@@ -166,19 +207,17 @@ def search_with_vector_search(question: str) -> Dict[str, Any]:
         )
     else:
         workspace = WorkspaceClient()
-
-    response = workspace.vector_search_indexes.query_index(
-        index_name=index_name,
-        query_vector=build_query_vector(question),
-        num_results=3,
-        columns=DEFAULT_COLUMNS,
+    response = workspace.api_client.do(
+        "POST",
+        f"/api/2.0/vector-search/indexes/{index_name}/query",
+        body=build_vector_search_body(question),
     )
     top_chunks = normalize_vector_rows(response)
     if not top_chunks:
         raise RuntimeError("Vector Search returned no results.")
 
     top_chunk = top_chunks[0]
-    answer = _compose_grounded_answer(top_chunks)
+    answer = _compose_grounded_answer(_augment_primary_document_context(top_chunks))
     return {
         "dataset_source": "workspace.document_rag.gold_vector_index_source",
         "runtime_mode": "databricks_vector_search",

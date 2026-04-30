@@ -101,6 +101,17 @@ def clean_answer_text(chunk_text: str, title: str) -> str:
     return cleaned
 
 
+def load_document_chunks() -> List[Dict[str, object]]:
+    sample_info = build_sample_dataset()
+    documents = _load_rows(sample_info["documents_path"])
+    return _chunk_documents(documents)
+
+
+def get_document_chunks(doc_id: str) -> List[Dict[str, object]]:
+    chunks = [chunk for chunk in load_document_chunks() if str(chunk["doc_id"]) == doc_id]
+    return sorted(chunks, key=lambda item: int(item["chunk_order"]))
+
+
 def run_pipeline(question: str = DEFAULT_QUERY) -> Dict[str, object]:
     sample_info = build_sample_dataset()
     documents = _load_rows(sample_info["documents_path"])

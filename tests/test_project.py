@@ -6,7 +6,9 @@ from unittest.mock import patch
 
 from src.rag_pipeline import run_pipeline
 from src.runtime_query import (
+    _augment_primary_document_context,
     _compose_grounded_answer,
+    build_vector_search_body,
     build_query_vector,
     in_databricks_runtime,
     normalize_vector_rows,
@@ -49,6 +51,10 @@ class DocumentRAGDatabricksTestCase(unittest.TestCase):
         self.assertGreater(vector[1], 0.0)
         self.assertGreater(vector[2], 0.0)
 
+    def test_vector_search_body_requests_larger_context_window(self) -> None:
+        body = build_vector_search_body("O que precisa estar habilitado antes de criar um índice vetorial padrão?")
+        self.assertEqual(body["num_results"], 10)
+
     def test_compose_grounded_answer_merges_same_document_chunks(self) -> None:
         answer = _compose_grounded_answer(
             [
@@ -66,6 +72,25 @@ class DocumentRAGDatabricksTestCase(unittest.TestCase):
                 },
             ]
         )
+        self.assertIn("Change Data Feed must", answer)
+        self.assertIn("be enabled on the source table.", answer)
+
+    def test_augment_primary_document_context_adds_adjacent_chunk_from_same_document(self) -> None:
+        augmented = _augment_primary_document_context(
+            [
+                {
+                    "chunk_id": "DOC-1002_chunk_2",
+                    "doc_id": "DOC-1002",
+                    "title": "Create a vector search index",
+                    "url": "https://docs.example.com/vector-search/create-index",
+                    "chunk_text": "be enabled on the source table.",
+                    "similarity": 0.5,
+                }
+            ]
+        )
+        chunk_ids = {chunk["chunk_id"] for chunk in augmented}
+        self.assertIn("DOC-1002_chunk_1", chunk_ids)
+        answer = _compose_grounded_answer(augmented)
         self.assertIn("Change Data Feed must", answer)
         self.assertIn("be enabled on the source table.", answer)
 
