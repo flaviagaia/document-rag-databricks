@@ -5,19 +5,44 @@ import os
 import re
 from typing import Any, Dict, List
 
-from .rag_pipeline import run_pipeline
+from .rag_pipeline import clean_answer_text, run_pipeline
 
 DEFAULT_INDEX_NAME = "workspace.document_rag.document_rag_index"
 DEFAULT_COLUMNS = ["chunk_id", "doc_id", "title", "url", "chunk_text"]
 LOGGER = logging.getLogger(__name__)
 TOKEN_PATTERN = re.compile(r"[a-zA-Z0-9]+")
 KEYWORD_GROUPS = [
-    {"unity", "catalog", "catalogs", "schema", "schemas", "permission", "permissions", "governance", "model", "models", "volume", "volumes"},
-    {"vector", "search", "index", "indexes", "embedding", "embeddings", "endpoint", "endpoints"},
-    {"change", "data", "feed", "delta", "source", "table", "tables", "enabled", "enable", "incremental"},
-    {"app", "apps", "streamlit", "service", "principal", "auth", "authentication", "credential", "credentials"},
-    {"chunk", "chunks", "chunking", "semantic", "context", "paragraph", "paragraphs", "heading", "headings"},
-    {"refresh", "refreshes", "pipeline", "pipelines", "modified", "rows", "downstream", "sync", "corpus"},
+    {
+        "unity", "catalog", "catalogs", "schema", "schemas", "permission", "permissions",
+        "governance", "model", "models", "volume", "volumes",
+        "catalogo", "catálogo", "catalogos", "catálogos", "esquema", "esquemas",
+        "permissao", "permissão", "permissoes", "permissões", "governanca", "governança",
+        "modelo", "modelos", "volume", "volumes",
+    },
+    {
+        "vector", "search", "index", "indexes", "embedding", "embeddings", "endpoint", "endpoints",
+        "vetorial", "indice", "índice", "indices", "índices", "busca", "embeddings", "endpoint", "endpoints",
+    },
+    {
+        "change", "data", "feed", "delta", "source", "table", "tables", "enabled", "enable", "incremental",
+        "mudanca", "mudança", "dados", "fonte", "tabela", "tabelas", "habilitado", "habilitada",
+        "habilitar", "ativado", "ativada", "incremental",
+    },
+    {
+        "app", "apps", "streamlit", "service", "principal", "auth", "authentication", "credential", "credentials",
+        "aplicativo", "aplicativos", "servico", "serviço", "principal", "autenticacao", "autenticação",
+        "credencial", "credenciais",
+    },
+    {
+        "chunk", "chunks", "chunking", "semantic", "context", "paragraph", "paragraphs", "heading", "headings",
+        "trecho", "trechos", "segmentacao", "segmentação", "semantico", "semântico", "contexto",
+        "paragrafo", "parágrafo", "paragrafos", "parágrafos", "cabecalho", "cabeçalho", "cabecalhos", "cabeçalhos",
+    },
+    {
+        "refresh", "refreshes", "pipeline", "pipelines", "modified", "rows", "downstream", "sync", "corpus",
+        "atualizacao", "atualização", "atualizar", "pipeline", "pipelines", "modificado", "modificados",
+        "linhas", "sincronizacao", "sincronização", "corpus",
+    },
 ]
 
 
@@ -65,6 +90,33 @@ def build_query_vector(question: str) -> List[float]:
     if not any(vector):
         return [0.1] * len(KEYWORD_GROUPS)
     return vector
+
+
+def _chunk_rank(chunk_id: str) -> int:
+    try:
+        return int(chunk_id.rsplit("_", 1)[-1])
+    except (TypeError, ValueError):
+        return 9999
+
+
+def _compose_grounded_answer(top_chunks: List[Dict[str, Any]]) -> str:
+    if not top_chunks:
+        return ""
+
+    primary_doc_id = top_chunks[0]["doc_id"]
+    primary_title = top_chunks[0]["title"]
+    same_doc_chunks = [chunk for chunk in top_chunks if chunk["doc_id"] == primary_doc_id]
+    same_doc_chunks.sort(key=lambda item: _chunk_rank(item.get("chunk_id", "")))
+
+    cleaned_parts: List[str] = []
+    for chunk in same_doc_chunks[:2]:
+        cleaned = clean_answer_text(str(chunk["chunk_text"]).strip(), primary_title)
+        if cleaned and cleaned not in cleaned_parts:
+            cleaned_parts.append(cleaned)
+
+    if cleaned_parts:
+        return " ".join(cleaned_parts).strip()
+    return clean_answer_text(str(top_chunks[0]["chunk_text"]).strip(), primary_title)
 
 
 def normalize_vector_rows(payload: Any) -> List[Dict[str, Any]]:
@@ -126,7 +178,7 @@ def search_with_vector_search(question: str) -> Dict[str, Any]:
         raise RuntimeError("Vector Search returned no results.")
 
     top_chunk = top_chunks[0]
-    answer = top_chunk["chunk_text"].strip()
+    answer = _compose_grounded_answer(top_chunks)
     return {
         "dataset_source": "workspace.document_rag.gold_vector_index_source",
         "runtime_mode": "databricks_vector_search",

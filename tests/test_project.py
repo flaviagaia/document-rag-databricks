@@ -5,7 +5,13 @@ import unittest
 from unittest.mock import patch
 
 from src.rag_pipeline import run_pipeline
-from src.runtime_query import build_query_vector, in_databricks_runtime, normalize_vector_rows, run_hybrid_query
+from src.runtime_query import (
+    _compose_grounded_answer,
+    build_query_vector,
+    in_databricks_runtime,
+    normalize_vector_rows,
+    run_hybrid_query,
+)
 
 
 class DocumentRAGDatabricksTestCase(unittest.TestCase):
@@ -37,6 +43,31 @@ class DocumentRAGDatabricksTestCase(unittest.TestCase):
         vector = build_query_vector("What must be enabled before creating a standard vector search index from a Delta table?")
         self.assertGreater(vector[1], 0.0)
         self.assertGreater(vector[2], 0.0)
+
+    def test_query_vector_maps_portuguese_question_to_expected_dimensions(self) -> None:
+        vector = build_query_vector("O que precisa estar habilitado antes de criar um índice vetorial padrão?")
+        self.assertGreater(vector[1], 0.0)
+        self.assertGreater(vector[2], 0.0)
+
+    def test_compose_grounded_answer_merges_same_document_chunks(self) -> None:
+        answer = _compose_grounded_answer(
+            [
+                {
+                    "chunk_id": "DOC-1002_chunk_2",
+                    "doc_id": "DOC-1002",
+                    "title": "Create a vector search index",
+                    "chunk_text": "be enabled on the source table.",
+                },
+                {
+                    "chunk_id": "DOC-1002_chunk_1",
+                    "doc_id": "DOC-1002",
+                    "title": "Create a vector search index",
+                    "chunk_text": "# Create a vector search index A vector search index is created from a Delta table containing content, metadata, and embeddings. For standard endpoints, Change Data Feed must",
+                },
+            ]
+        )
+        self.assertIn("Change Data Feed must", answer)
+        self.assertIn("be enabled on the source table.", answer)
 
     def test_hybrid_query_falls_back_when_vector_search_fails(self) -> None:
         with patch.dict(os.environ, {"DATABRICKS_HOST": "https://example.databricks.com"}, clear=True):

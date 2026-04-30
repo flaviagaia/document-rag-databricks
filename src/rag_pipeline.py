@@ -91,7 +91,7 @@ def _query_vector(question: str) -> Dict[str, float]:
     return {token: count / length for token, count in counts.items()}
 
 
-def _clean_answer_text(chunk_text: str, title: str) -> str:
+def clean_answer_text(chunk_text: str, title: str) -> str:
     cleaned = chunk_text.replace("\n", " ").strip()
     if cleaned.startswith("# "):
         cleaned = cleaned[2:].strip()
@@ -117,7 +117,7 @@ def run_pipeline(question: str = DEFAULT_QUERY) -> Dict[str, object]:
     top_chunks = scored[:3]
 
     top_chunk = top_chunks[0]
-    answer = _clean_answer_text(str(top_chunk["chunk_text"]), str(top_chunk["title"]))
+    answer = clean_answer_text(str(top_chunk["chunk_text"]), str(top_chunk["title"]))
 
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
     report_path = PROCESSED_DIR / "document_rag_databricks_report.json"
