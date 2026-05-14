@@ -16,17 +16,6 @@ Hoje o projeto já existe em duas formas complementares:
 - uma **versão local reproduzível**, ideal para GitHub, testes e demonstrações rápidas;
 - uma **versão conectada ao Databricks real**, com `Unity Catalog`, `Delta tables`, `Mosaic AI Vector Search` e `Databricks Apps`.
 
-## Storytelling básico
-
-Quando uma empresa quer construir um assistente de documentação, normalmente ela precisa mais do que um chatbot. Ela precisa de:
-
-- um lugar governado para guardar os documentos;
-- um pipeline para quebrar e preparar o conteúdo;
-- um índice vetorial para recuperação semântica;
-- uma interface final para consulta;
-- e um caminho claro entre dado bruto e resposta final.
-
-Esse projeto existe para mostrar exatamente isso.
 
 ## Interface
 
@@ -227,10 +216,10 @@ Também foram mantidos grants coerentes sobre as tabelas Delta relacionadas ao f
 
 Uma melhoria importante deste projeto é que:
 
-- a API em [app.py](/Users/flaviagaia/Documents/CV_FLAVIA_CODEX/document-rag-databricks/app.py)
-- e a interface em [streamlit_app.py](/Users/flaviagaia/Documents/CV_FLAVIA_CODEX/document-rag-databricks/streamlit_app.py)
+- a API em [app.py](app.py)
+- e a interface em [streamlit_app.py](streamlit_app.py)
 
-usam a mesma camada de execução híbrida em [runtime_query.py](/Users/flaviagaia/Documents/CV_FLAVIA_CODEX/document-rag-databricks/src/runtime_query.py).
+usam a mesma camada de execução híbrida em [runtime_query.py](src/runtime_query.py).
 
 Na prática, isso significa:
 
@@ -245,43 +234,43 @@ Esse desenho reduz dois tipos de inconsistência muito comuns:
 
 ## Estrutura do repositório
 
-- [main.py](/Users/flaviagaia/Documents/CV_FLAVIA_CODEX/document-rag-databricks/main.py)  
+- [main.py](main.py)  
   Executa o pipeline local ponta a ponta.
 
-- [app.py](/Users/flaviagaia/Documents/CV_FLAVIA_CODEX/document-rag-databricks/app.py)  
+- [app.py](app.py)  
   API local simples para consulta.
 
-- [streamlit_app.py](/Users/flaviagaia/Documents/CV_FLAVIA_CODEX/document-rag-databricks/streamlit_app.py)  
+- [streamlit_app.py](streamlit_app.py)  
   Interface de demo no estilo de um app de consulta documental.
 
-- [src/sample_data.py](/Users/flaviagaia/Documents/CV_FLAVIA_CODEX/document-rag-databricks/src/sample_data.py)  
+- [src/sample_data.py](src/sample_data.py)  
   Gera a amostra local inspirada no `watsonxDocsQA`.
 
-- [src/rag_pipeline.py](/Users/flaviagaia/Documents/CV_FLAVIA_CODEX/document-rag-databricks/src/rag_pipeline.py)  
+- [src/rag_pipeline.py](src/rag_pipeline.py)  
   Faz chunking, retrieval local, grounding e artefato final.
 
-- [src/runtime_query.py](/Users/flaviagaia/Documents/CV_FLAVIA_CODEX/document-rag-databricks/src/runtime_query.py)  
+- [src/runtime_query.py](src/runtime_query.py)  
   Centraliza a decisão entre `Vector Search` real e fallback local.
 
-- [app.yaml](/Users/flaviagaia/Documents/CV_FLAVIA_CODEX/document-rag-databricks/app.yaml)  
+- [app.yaml](app.yaml)  
   Define o comando do app e injeta o nome do índice vetorial em `VECTOR_SEARCH_INDEX`.
 
-- [databricks.yml](/Users/flaviagaia/Documents/CV_FLAVIA_CODEX/document-rag-databricks/databricks.yml)  
+- [databricks.yml](databricks.yml)  
   Exemplo de Asset Bundle para orquestração do pipeline.
 
-- [notebooks/01_bronze_ingestion.py](/Users/flaviagaia/Documents/CV_FLAVIA_CODEX/document-rag-databricks/notebooks/01_bronze_ingestion.py)  
+- [notebooks/01_bronze_ingestion.py](notebooks/01_bronze_ingestion.py)  
   Exemplo de notebook Databricks para ingestão bronze.
 
-- [notebooks/02_silver_chunking.py](/Users/flaviagaia/Documents/CV_FLAVIA_CODEX/document-rag-databricks/notebooks/02_silver_chunking.py)  
+- [notebooks/02_silver_chunking.py](notebooks/02_silver_chunking.py)  
   Exemplo de notebook de chunking.
 
-- [notebooks/03_gold_index_source.py](/Users/flaviagaia/Documents/CV_FLAVIA_CODEX/document-rag-databricks/notebooks/03_gold_index_source.py)  
+- [notebooks/03_gold_index_source.py](notebooks/03_gold_index_source.py)  
   Exemplo de notebook para publicação da tabela-fonte do índice.
 
-- [notebooks/04_query_vector_search.py](/Users/flaviagaia/Documents/CV_FLAVIA_CODEX/document-rag-databricks/notebooks/04_query_vector_search.py)  
+- [notebooks/04_query_vector_search.py](notebooks/04_query_vector_search.py)  
   Exemplo de consulta ao Mosaic AI Vector Search.
 
-- [sql/](/Users/flaviagaia/Documents/CV_FLAVIA_CODEX/document-rag-databricks/sql)  
+- [sql/](sql)  
   Scripts SQL para schema, tabelas Delta e notas do índice vetorial.
 
 ## Execução local
@@ -341,7 +330,7 @@ Snapshot validado:
 
 ## Contrato do runtime híbrido
 
-O arquivo [runtime_query.py](/Users/flaviagaia/Documents/CV_FLAVIA_CODEX/document-rag-databricks/src/runtime_query.py) implementa três responsabilidades separadas:
+O arquivo [runtime_query.py](src/runtime_query.py) implementa três responsabilidades separadas:
 
 ### 1. Detecção de ambiente
 
@@ -387,7 +376,7 @@ Valor padrão:
 
 Se a variável não existir, o código já usa esse mesmo índice como default.
 
-Hoje o [app.yaml](/Users/flaviagaia/Documents/CV_FLAVIA_CODEX/document-rag-databricks/app.yaml) está assim, de forma propositalmente simples:
+Hoje o [app.yaml](app.yaml) está assim, de forma propositalmente simples:
 
 ```yaml
 command:
